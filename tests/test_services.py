@@ -1,6 +1,7 @@
 """Business rules and laptop sensitivity regression tests."""
 
 from copy import deepcopy
+import time
 import unittest
 
 from models import Alternative, Criterion, Rating
@@ -27,6 +28,25 @@ class DecisionServiceTests(unittest.TestCase):
 
     def test_valid_evaluation(self):
         self.assertEqual(self.validate(), [])
+
+    def test_nfa04_evaluation_performance(self):
+        # Verify NFA04 at the maximum documented size: 20 alternatives × 20 criteria.
+        alternatives = [Alternative(i, f"Alternative {i}", 1) for i in range(1, 21)]
+        criteria = [Criterion(i, f"Criterion {i}", 5.0, 1) for i in range(1, 21)]
+        ratings = [Rating(None, a.id, c.id, (a.id + c.id) % 5 + 1)
+                   for a in alternatives for c in criteria]
+
+        start = time.perf_counter()
+        errors = self.service.validate_for_evaluation(alternatives, criteria, ratings)
+        scores = self.service.calculate_scores(alternatives, criteria, ratings)
+        ranking = self.service.create_ranking(scores)
+        elapsed = time.perf_counter() - start
+
+        print(f"\nNFA04 evaluation: {elapsed:.6f} seconds")
+        self.assertEqual(errors, [])
+        self.assertEqual(len(scores), 20)
+        self.assertEqual(len(ranking), 20)
+        self.assertLess(elapsed, 2.0, "NFA04 evaluation must finish in less than 2 seconds.")
 
     def test_fewer_than_two_alternatives(self):
         self.alternatives = self.alternatives[:1]
